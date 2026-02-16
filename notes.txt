@@ -6,17 +6,13 @@ configs/wholebody/2d_kpt_sview_rgb_img/topdown_heatmap/coco-wholebody/hrnet_w48_
 https://download.openmmlab.com/mmpose/top_down/hrnet/hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth \
 --img-root tests/data/baseball/arm/"specific video" \
 --img "specific frame from video" \
---out-img-root vis_results/baseball/"specific video" \
---device=cpu
+--out-img-root vis_results/baseball/arm/"specific video" \
+--device=cpu \
 --arm=left
 
 
 FFmpeg command for getting frames:
-ffmpeg -i video_name.mp4 baseball_frames/frame_%04d.png
-
-
-Calculate an arm angle over 10-20 videos
-- Mean Absolute Error
+ffmpeg -i video_name.mp4 frame_%04d.png
 
 
 top_down_img_demo_with_mmdet.py holds model outputs
@@ -48,5 +44,4 @@ confidence: 0.0 to 1.0 (higher = more confident)
         - calculate error between estimate & true value -> use mean absolute error or check within a window (accuracy within degree of window, then get percent of correct predictions)
         - either use the best frame or the average of the frames per video
     - quantify how often the model doesnt detect the pitcher (how sensitive is it the frame choice -> whats the max can you be off by out of a 5 frame window
-
     - calculate error, number of frames within the error, variance of the error -> everything comes from the intuition you gain form looking at the output
