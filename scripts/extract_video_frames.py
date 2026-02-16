@@ -26,6 +26,24 @@ from pathlib import Path
 from argparse import ArgumentParser
 
 
+def check_ffmpeg_installed():
+    """Check if ffmpeg is installed and accessible."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=300
+        )
+        print(f"✓ FFmpeg found: {result.stdout.split()[2]}")
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("✗ FFmpeg not found. Please install ffmpeg:")
+        print("  brew install ffmpeg")
+        return False
+
+
 def get_desktop_path():
     home = Path.home()
     desktop = home / "Desktop"
@@ -44,31 +62,15 @@ def get_video_files(videos_dir):
     return sorted(video_files)
 
 
-def check_ffmpeg_installed():
-    """Check if ffmpeg is installed and accessible."""
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        print(f"✓ FFmpeg found: {result.stdout.split()[2]}")
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print("✗ FFmpeg not found. Please install ffmpeg:")
-        print("  brew install ffmpeg")
-        return False
-
 
 def is_already_processed(video_path, videos_dir):
     """Check if a video has already been processed."""
-    video_name = video_path.stem  # Get filename without extension
+    video_name = video_path.stem
     all_frames_dir = Path(videos_dir) / video_name / "all_frames"
 
     # Check if all_frames directory exists and has files
     if all_frames_dir.exists():
-        frame_files = list(all_frames_dir.glob("frame_*.png"))
+        frame_files = list(all_frames_dir.glob("frame_*.jpg"))
         if frame_files:
             return True, len(frame_files)
 
@@ -86,12 +88,13 @@ def extract_frames(video_path, output_dir):
     Returns:
         tuple: (success: bool, frame_count: int, error_message: str)
     """
+
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # FFmpeg command to extract frames
-    # Using the same format as in notes.txt: frame_%04d.png
-    output_pattern = str(output_dir / "frame_%04d.png")
+    # Using the same format as in notes.txt: frame_%04d.jpg
+    output_pattern = str(output_dir / "frame_%04d.jpg")
 
     cmd = [
         "ffmpeg",
@@ -109,11 +112,14 @@ def extract_frames(video_path, output_dir):
         )
 
         # Count extracted frames
-        frame_files = list(output_dir.glob("frame_*.png"))
+        frame_files = list(output_dir.glob("frame_*.jpg"))
         frame_count = len(frame_files)
 
         return True, frame_count, None
 
+    except subprocess.TimeoutExpired:
+        error_msg = "FFmpeg timed out (>5 minutes) - video file may be corrupted or too large"
+        return False, 0, error_msg
     except subprocess.CalledProcessError as e:
         error_msg = f"FFmpeg error: {e.stderr}"
         return False, 0, error_msg
@@ -127,23 +133,24 @@ def process_videos(videos_dir, force=False):
         videos_dir: Path to directory containing video files
         force: If True, reprocess already-processed videos
     """
+
     videos_dir = Path(videos_dir)
 
     if not videos_dir.exists():
-        print(f"✗ Videos directory not found: {videos_dir}")
-        print(f"  Please create the directory and add your video files.")
+        print(f"Videos directory not found: {videos_dir}")
+        print(f"Please create the directory and add your video files.")
         return
 
     # Get all video files
     video_files = get_video_files(videos_dir)
 
     if not video_files:
-        print(f"✗ No MP4 video files found in: {videos_dir}")
+        print(f"✗ No mp4 video files found in: {videos_dir}")
         return
 
-    print(f"\n{'=' * 70}")
+    print(f"\n{'=' * 50}")
     print(f"Found {len(video_files)} video(s) to process")
-    print(f"{'=' * 70}\n")
+    print(f"{'=' * 50}\n")
 
     processed_count = 0
     skipped_count = 0
@@ -157,7 +164,7 @@ def process_videos(videos_dir, force=False):
         already_processed, existing_frames = is_already_processed(video_path, videos_dir)
 
         if already_processed and not force:
-            print(f"  ⊙ Skipping (already processed: {existing_frames} frames)")
+            print(f"  Skipping (already processed: {existing_frames} frames)")
             skipped_count += 1
             print()
             continue
@@ -171,36 +178,35 @@ def process_videos(videos_dir, force=False):
         all_frames_dir.mkdir(parents=True, exist_ok=True)
         release_frames_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"  Created: {video_name}/all_frames/")
-        print(f"  Created: {video_name}/release_frames/")
+        print(f"Created: {video_name}/all_frames/")
+        print(f"Created: {video_name}/release_frames/")
 
         # Extract frames
-        print(f"  Extracting frames...")
+        print(f"Extracting frames...")
         success, frame_count, error_msg = extract_frames(video_path, all_frames_dir)
 
         if success:
-            print(f"  ✓ Extracted {frame_count} frames")
+            print(f"Extracted {frame_count} frames")
             processed_count += 1
         else:
-            print(f"  ✗ Failed to extract frames")
-            print(f"    Error: {error_msg}")
+            print(f"Failed to extract frames")
+            print(f"Error: {error_msg}")
             failed_count += 1
 
         print()
 
     # Print summary
-    print(f"{'=' * 70}")
+    print(f"{'=' * 50}")
     print(f"SUMMARY")
-    print(f"{'=' * 70}")
-    print(f"  Processed: {processed_count}")
-    print(f"  Skipped:   {skipped_count}")
-    print(f"  Failed:    {failed_count}")
-    print(f"  Total:     {len(video_files)}")
-    print(f"{'=' * 70}\n")
+    print(f"{'=' * 50}")
+    print(f"Processed: {processed_count}")
+    print(f"Skipped:   {skipped_count}")
+    print(f"Failed:    {failed_count}")
+    print(f"Total:     {len(video_files)}")
+    print(f"{'=' * 50}\n")
 
 
 def main():
-    """Main entry point for the script."""
     parser = ArgumentParser(
         description="Extract frames from baseball videos for pitching analysis"
     )
@@ -226,7 +232,7 @@ def main():
             desktop = get_desktop_path()
             videos_dir = desktop / "baseball_vids"
         except FileNotFoundError as e:
-            print(f"✗ Error: {e}")
+            print(f"Error: {e}")
             sys.exit(1)
 
     print(f"\nVideos directory: {videos_dir}\n")

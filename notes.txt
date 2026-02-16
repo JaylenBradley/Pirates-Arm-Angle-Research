@@ -45,3 +45,9 @@ confidence: 0.0 to 1.0 (higher = more confident)
         - either use the best frame or the average of the frames per video
     - quantify how often the model doesnt detect the pitcher (how sensitive is it the frame choice -> whats the max can you be off by out of a 5 frame window
     - calculate error, number of frames within the error, variance of the error -> everything comes from the intuition you gain form looking at the output
+
+***
+
+- Developed a script to extract frames in batches, reducing manual labor by x%
+
+***
