@@ -240,7 +240,7 @@ class PitcherLabeler:
         return self.selected_person
 
 
-def process_frame(frame_path, video_dir, labeler, force=False):
+def process_frame(frame_path, video_dir, video_id, ground_truth_data, labeler, force=False):
     """
     Process a single frame to label the pitcher.
 
@@ -302,13 +302,58 @@ def process_frame(frame_path, video_dir, labeler, force=False):
     # Get pitcher data
     pitcher_data = persons_data[selected_person_idx]
 
-    # Create output data with reduced keypoints (only relevant ones)
+    # Get ground truth data to determine arm side
+    arm_side = 'right'  # default
+    if video_id in ground_truth_data:
+        pitcher_hand = ground_truth_data[video_id]['PitcherHand']
+        arm_side = 'right' if pitcher_hand.upper() == 'R' else 'left'
+
+    # Extract keypoints for the specific arm
+    keypoints_array = np.array(pitcher_data['keypoints'])
+
+    # Get keypoint indices
+    if arm_side == 'right':
+        shoulder_idx = pose_utils.KEYPOINT_NAMES['right_shoulder']
+        elbow_idx = pose_utils.KEYPOINT_NAMES['right_elbow']
+        wrist_idx = pose_utils.KEYPOINT_NAMES['right_wrist']
+    else:
+        shoulder_idx = pose_utils.KEYPOINT_NAMES['left_shoulder']
+        elbow_idx = pose_utils.KEYPOINT_NAMES['left_elbow']
+        wrist_idx = pose_utils.KEYPOINT_NAMES['left_wrist']
+
+    # Extract specific keypoints
+    shoulder = keypoints_array[shoulder_idx]
+    elbow = keypoints_array[elbow_idx]
+    wrist = keypoints_array[wrist_idx]
+
+    # Create keypoint dictionaries
+    shoulder_key = f'{arm_side}_shoulder'
+    elbow_key = f'{arm_side}_elbow'
+    wrist_key = f'{arm_side}_wrist'
+
+    # Create output data with extracted keypoints
     output_data = {
         'frame': frame_path.name,
         'pitcher_detected': True,
         'pitcher_person_id': pitcher_data['person_id'],
         'bbox': pitcher_data['bbox'],
-        'keypoints': pitcher_data['keypoints']  # Store all 133 keypoints for flexibility
+        'keypoints': pitcher_data['keypoints'],  # Store all 133 keypoints for flexibility
+        'arm_side': arm_side,
+        shoulder_key: {
+            'x': float(shoulder[0]),
+            'y': float(shoulder[1]),
+            'confidence': float(shoulder[2])
+        },
+        elbow_key: {
+            'x': float(elbow[0]),
+            'y': float(elbow[1]),
+            'confidence': float(elbow[2])
+        },
+        wrist_key: {
+            'x': float(wrist[0]),
+            'y': float(wrist[1]),
+            'confidence': float(wrist[2])
+        }
     }
 
     # Save JSON
@@ -345,10 +390,10 @@ def process_frame(frame_path, video_dir, labeler, force=False):
     output_img = output_dir / f"{pitcher_frame_name}.jpg"
     cv2.imwrite(str(output_img), crop)
 
-    return True, f"Labeled pitcher (person {selected_person_idx + 1})", False
+    return True, f"Labeled pitcher (person {selected_person_idx + 1}, {arm_side} arm)", False
 
 
-def process_all_videos(baseball_vids_dir, force=False):
+def process_all_videos(baseball_vids_dir, ground_truth_data, force=False):
     """
     Process all videos in the baseball_vids directory.
 
@@ -362,9 +407,9 @@ def process_all_videos(baseball_vids_dir, force=False):
         print(f"✗ No video directories found in: {baseball_vids_dir}")
         return
 
-    print(f"\n{'=' * 60}")
+    print(f"\n{'=' * 50}")
     print(f"Found {len(video_dirs)} video(s) to process")
-    print(f"{'=' * 60}\n")
+    print(f"{'=' * 50}\n")
 
     labeler = PitcherLabeler()
 
@@ -398,7 +443,7 @@ def process_all_videos(baseball_vids_dir, force=False):
 
             try:
                 success, message, quit_flag = process_frame(
-                    frame_path, video_dir, labeler, force=force
+                    frame_path, video_dir, video_id, ground_truth_data, labeler, force=force
                 )
 
                 if quit_flag:
@@ -431,15 +476,15 @@ def process_all_videos(baseball_vids_dir, force=False):
             break
 
     # Print overall summary
-    print(f"{'=' * 60}")
+    print(f"{'=' * 50}")
     print(f"OVERALL SUMMARY")
-    print(f"{'=' * 60}")
+    print(f"{'=' * 50}")
     print(f"Videos:    {len(video_dirs)}")
     print(f"Frames:    {total_frames}")
     print(f"Labeled:   {total_processed}")
     print(f"Skipped:   {total_skipped}")
     print(f"Failed:    {total_failed}")
-    print(f"{'=' * 60}\n")
+    print(f"{'=' * 50}\n")
 
 
 def main():
@@ -451,6 +496,12 @@ def main():
         type=str,
         default=None,
         help="Path to baseball_vids directory (default: ~/Desktop/baseball_vids)"
+    )
+    parser.add_argument(
+        "--csv",
+        type=str,
+        default=None,
+        help="Path to ground truth CSV file (default: baseball_vids/arm_angles_high_speed.csv)"
     )
     parser.add_argument(
         "--force",
@@ -471,12 +522,32 @@ def main():
         print(f"Error: Directory not found: {baseball_vids_dir}")
         sys.exit(1)
 
+    # Get CSV path
+    if args.csv:
+        csv_path = Path(args.csv)
+    else:
+        csv_path = baseball_vids_dir / "arm_angles_high_speed.csv"
+
+    if not csv_path.exists():
+        print(f"Warning: Ground truth CSV not found: {csv_path}")
+        print("Will use default 'right' arm side for all pitchers\n")
+        ground_truth_data = {}
+    else:
+        # Load ground truth data
+        print("Loading ground truth data...")
+        try:
+            ground_truth_data = pose_utils.load_ground_truth_csv(csv_path)
+            print(f"✓ Loaded ground truth for {len(ground_truth_data)} videos\n")
+        except Exception as e:
+            print(f"Warning: Failed to load ground truth CSV: {e}")
+            print("Will use default 'right' arm side for all pitchers\n")
+            ground_truth_data = {}
+
     print(f"\nBaseball videos directory: {baseball_vids_dir}")
     print(f"Force reprocessing: {args.force}\n")
 
     # Process all videos
-    process_all_videos(baseball_vids_dir, force=args.force)
-
+    process_all_videos(baseball_vids_dir, ground_truth_data, force=args.force)
 
 if __name__ == "__main__":
     main()

@@ -273,10 +273,10 @@ def process_all_videos(baseball_vids_dir, ground_truth_data, start_joint='should
         return
 
     print(f"Found {len(video_dirs)} video directories\n")
-    print(f"{'=' * 60}")
+    print(f"{'=' * 50}")
     print(f"CALCULATING PITCHER ANGLES")
     print(f"Start joint: {start_joint}")
-    print(f"{'=' * 60}\n")
+    print(f"{'=' * 50}\n")
 
     # Statistics
     total_frames = 0
