@@ -56,7 +56,7 @@ def collect_frame_data(baseball_vids_dir):
             continue
 
         # Get all frame calculation directories
-        frame_calc_dirs = sorted(calc_dir.glob("frame_*_angle"))
+        frame_calc_dirs = sorted(calc_dir.glob("frame_*_angle*"))
 
         for frame_calc_dir in frame_calc_dirs:
             json_path = frame_calc_dir / "data.json"
@@ -69,8 +69,8 @@ def collect_frame_data(baseball_vids_dir):
                 data = pose_utils.load_json(json_path)
                 pitcher_data = data.get('pitcher_data', {})
 
-                # Extract frame name (remove _angle suffix)
-                frame_name = frame_calc_dir.name.replace('_angle', '')
+                # Extract frame name (remove _angle and everything after it)
+                frame_name = frame_calc_dir.name.split('_angle')[0]
 
                 # Get angles based on start_joint used
                 start_joint = pitcher_data.get('start_joint', 'shoulder')
@@ -81,9 +81,9 @@ def collect_frame_data(baseball_vids_dir):
                 frame_entry = {
                     'video_id': video_id,
                     'frame_name': frame_name,
+                    'ground_truth_angle': ground_truth if ground_truth is not None else 'N/A',
                     'pitcher_angle_shoulder_wrist': 'N/A',
-                    'pitcher_angle_elbow_wrist': 'N/A',
-                    'ground_truth_angle': ground_truth if ground_truth is not None else 'N/A'
+                    'pitcher_angle_elbow_wrist': 'N/A'
                 }
 
                 # Set the appropriate angle based on start_joint
@@ -153,9 +153,9 @@ def write_results_csv(frame_data_list, output_path):
     fieldnames = [
         'video_id',
         'frame_name',
+        'ground_truth_angle',
         'pitcher_angle_shoulder_wrist',
-        'pitcher_angle_elbow_wrist',
-        'ground_truth_angle'
+        'pitcher_angle_elbow_wrist'
     ]
 
     with open(output_path, 'w', newline='') as csvfile:

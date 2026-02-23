@@ -93,8 +93,8 @@ def main():
         "--start-joint",
         type=str,
         default="shoulder",
-        choices=["shoulder", "elbow"],
-        help="Joint to start angle measurement from (default: shoulder)"
+        choices=["shoulder", "elbow", "both"],
+        help="Joint to start angle measurement from (default: shoulder). Use 'both' to calculate both joints."
     )
     parser.add_argument(
         "--device",

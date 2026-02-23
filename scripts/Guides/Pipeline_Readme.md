@@ -63,7 +63,7 @@ python scripts/generate_summary_statistics.py --plot
 ```
 
 **Master Script Options:**
-- `--start-joint shoulder|elbow` - Which joint to use (default: shoulder)
+- `--start-joint shoulder|elbow|both` - Which joint to use (default: shoulder)
 - `--device cpu` - Device for inference
 - `--force` - Force reprocessing of all stages
 - `--skip-poses` - Skip pose extraction stage
@@ -75,6 +75,9 @@ python scripts/generate_summary_statistics.py --plot
 ```bash
 # Run with elbow-to-wrist angles
 python scripts/run_full_pipeline.py --start-joint elbow
+
+# Calculate BOTH shoulder-to-wrist AND elbow-to-wrist in one run
+python scripts/run_full_pipeline.py --start-joint both
 
 # Skip already-completed stages
 python scripts/run_full_pipeline.py --skip-poses --skip-labeling
@@ -108,7 +111,7 @@ python scripts/label_pitchers.py
 **Controls:**
 - **Click** on a person's image to select them
 - **Press 1-9** to select person by number
-- **Press 0 or n** to mark "no pitcher detected"
+- **Press n** to mark "no pitcher detected"
 - **Press s** to skip current frame
 - **Press q** to quit
 
@@ -127,12 +130,17 @@ python scripts/calculate_pitcher_angles.py
 Options:
 - `--videos-dir PATH` - Custom path to baseball_vids directory
 - `--csv PATH` - Path to ground truth CSV (default: baseball_vids/arm_angles_high_speed.csv)
-- `--start-joint shoulder|elbow` - Joint to start angle from (default: shoulder)
+- `--start-joint shoulder|elbow|both` - Joint to start angle from (default: shoulder)
 - `--force` - Reprocess already-calculated frames
 
-**To calculate elbow-to-wrist angles instead:**
+**To calculate different joint combinations:**
 ```bash
+```bash
+# Elbow-to-wrist angles only
 python scripts/calculate_pitcher_angles.py --start-joint elbow
+
+# BOTH shoulder-to-wrist AND elbow-to-wrist in one run
+python scripts/calculate_pitcher_angles.py --start-joint both
 ```
 
 ### Stage 4: Generate Results CSV
@@ -251,11 +259,21 @@ python scripts/generate_summary_statistics.py --plot
 
 ### Option 3: Calculate Both Angle Types
 
+**Recommended approach (single command):**
 ```bash
-# Run pipeline with shoulder-to-wrist
+# Run pipeline and calculate BOTH joints in one go
+python scripts/run_full_pipeline.py --start-joint both
+
+# Generate statistics
+python scripts/generate_summary_statistics.py --plot
+```
+
+**Alternative approach (calculate separately):**
+```
+# Run pipeline with shoulder-to-wrist first
 python scripts/run_full_pipeline.py --start-joint shoulder
 
-# Calculate elbow-to-wrist (reuses existing poses and labels)
+# Then calculate elbow-to-wrist (reuses existing poses and labels)
 python scripts/calculate_pitcher_angles.py --start-joint elbow --force
 
 # Regenerate CSV to include both
@@ -318,7 +336,7 @@ If you mark a frame as "no pitcher detected" in Stage 2:
 - Only frames in `release_frames/` are processed (manually curated)
 - Frame naming follows pattern: `frame_XXXX → frame_XXXX_poses → frame_XXXX_pitcher → frame_XXXX_angle`
 - CSV PitcherHand (R/L) determines which arm to analyze
-- Default angle calculation is shoulder-to-wrist (use `--start-joint elbow` for elbow-to-wrist)
+- Default angle calculation is shoulder-to-wrist (use `--start-joint elbow` for elbow-to-wrist, or `--start-joint both` to calculate both types in one run)
 - Results CSV merges shoulder and elbow calculations for frames where both exist
 - Statistics are calculated separately for shoulder-wrist and elbow-wrist angles
 
