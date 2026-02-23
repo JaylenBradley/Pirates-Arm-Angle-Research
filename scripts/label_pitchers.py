@@ -20,9 +20,9 @@ Arguments:
 Controls:
     - Click on a person's crop to select them as the pitcher
     - Or press the number key (1-9) corresponding to the person
-    - Press '0' or 'n' to mark frame as "no pitcher detected"
-    - Press 'q' to quit
+    - Press 'n' to mark frame as "no pitcher detected"
     - Press 's' to skip current frame
+    - Press 'q' to quit
 
 Example:
     python scripts/label_pitchers.py
@@ -35,7 +35,6 @@ from argparse import ArgumentParser
 import cv2
 import numpy as np
 
-# Import our utilities
 import pose_utils
 
 
@@ -53,7 +52,7 @@ class PitcherLabeler:
         self.tile_size = tile_size
         self.padding = padding
         self.selected_person = None
-        self.window_name = "Select Pitcher - Click or Press Number (0/n=No Pitcher, s=Skip, q=Quit)"
+        self.window_name = "Select Pitcher - Click or Press Number (n=No Pitcher, s=Skip, q=Quit)"
 
     def create_person_crop(self, image, bbox, person_id):
         """
@@ -216,14 +215,14 @@ class PitcherLabeler:
                     self.selected_person = person_idx
                     break
 
-            # 0 or 'n' pressed - no pitcher
-            elif key == ord('0') or key == ord('n'):
+            # 'n' pressed - no pitcher
+            elif key == ord('n'):
                 self.selected_person = -1
                 break
 
             # 's' pressed - skip
             elif key == ord('s'):
-                self.selected_person = None
+                self.selected_person = -2
                 break
 
             # 'q' pressed - quit
@@ -286,9 +285,13 @@ def process_frame(frame_path, video_dir, video_id, ground_truth_data, labeler, f
     print(f"    Select pitcher ({len(persons_data)} person(s) detected)...")
     selected_person_idx = labeler.select_pitcher(image, persons_data)
 
-    # Check for quit
+    # Check for quit (q key pressed)
     if selected_person_idx is None:
-        return False, "Skipped by user", True
+        return False, "Quit by user", True
+
+    # Check for skip current frame (s key pressed)
+    if selected_person_idx == -2:
+        return "skip", "Skipped current frame", False
 
     # Create output directory
     output_dir = video_dir / 'pitcher_labels' / pitcher_frame_name

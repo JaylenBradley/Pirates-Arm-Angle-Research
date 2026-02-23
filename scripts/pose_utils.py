@@ -17,15 +17,15 @@ import csv
 from pathlib import Path
 import warnings
 
-try:
-    from mmpose.apis import init_pose_model
-    from mmpose.datasets import DatasetInfo
-    from mmdet.apis import init_detector
-
-    MMPOSE_AVAILABLE = True
-except ImportError:
-    MMPOSE_AVAILABLE = False
-    warnings.warn("MMPose/MMDet not available. Some functions will not work.")
+# try:
+#     from mmpose.apis import init_pose_model
+#     from mmpose.datasets import DatasetInfo
+#     from mmdet.apis import init_detector
+#
+#     MMPOSE_AVAILABLE = True
+# except ImportError:
+#     MMPOSE_AVAILABLE = False
+#     warnings.warn("MMPose/MMDet not available. Some functions will not work.")
 
 # COCO-WholeBody Keypoint Indices (133 total keypoints)
 KEYPOINT_NAMES = {
@@ -308,6 +308,10 @@ def init_models(det_config, det_checkpoint, pose_config, pose_checkpoint, device
     """
     Initialize MMDetection and MMPose models.
 
+    Note: MMPose/MMDet modules are imported here (lazy loading) to avoid
+    triggering apex warnings when pose_utils is imported by scripts that
+    don't need model inference.
+
     Args:
         det_config: Path to detection config file
         det_checkpoint: Path to detection checkpoint
@@ -318,8 +322,16 @@ def init_models(det_config, det_checkpoint, pose_config, pose_checkpoint, device
     Returns:
         Tuple of (det_model, pose_model, dataset_info)
     """
-    if not MMPOSE_AVAILABLE:
-        raise ImportError("MMPose and MMDet must be installed")
+    # Lazy import - only load mmpose/mmdet when actually needed
+    try:
+        from mmpose.apis import init_pose_model
+        from mmpose.datasets import DatasetInfo
+        from mmdet.apis import init_detector
+    except ImportError:
+        raise ImportError(
+            "MMPose and MMDet must be installed to use model initialization. "
+            "Install with: pip install mmpose mmdet"
+        )
 
     # Initialize detection model
     det_model = init_detector(det_config, det_checkpoint, device=device.lower())

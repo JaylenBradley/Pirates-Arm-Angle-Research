@@ -32,14 +32,11 @@ Examples:
 """
 
 import sys
-import os
 from pathlib import Path
 from argparse import ArgumentParser
 import cv2
-import numpy as np
 import math
 
-# Import our utilities
 import pose_utils
 
 
@@ -150,9 +147,10 @@ def calculate_frame_angle(frame_path, video_dir, video_id, ground_truth_data,
     """
     frame_name = frame_path.stem  # e.g., 'frame_0001'
 
-    # Check if already processed
-    if not force and pose_utils.check_output_exists(video_dir, frame_name, 'pitcher_calculations'):
-        return True, "Already calculated"
+    # Check if this specific joint calculation already exists
+    output_dir_name = f"{frame_name}_angle_{start_joint}"
+    if not force and pose_utils.check_output_exists(video_dir, output_dir_name, 'pitcher_calculations'):
+        return True, f"Already calculated ({start_joint})"
 
     # Build paths
     pitcher_label_dir = video_dir / "pitcher_labels" / f"{frame_name}_pitcher"
@@ -169,7 +167,7 @@ def calculate_frame_angle(frame_path, video_dir, video_id, ground_truth_data,
 
     # Check if pitcher was detected
     if pitcher_data.get('pitcher_detected') == False:
-        return False, "No pitcher detected in frame (skipping)"
+        return "skip", "No pitcher detected in frame"
 
     # Get ground truth for this video
     if video_id not in ground_truth_data:
@@ -219,7 +217,7 @@ def calculate_frame_angle(frame_path, video_dir, video_id, ground_truth_data,
     pitcher_data['pitcher_hand'] = pitcher_hand
 
     # Create output directory
-    output_dir = video_dir / "pitcher_calculations" / f"{frame_name}_angle"
+    output_dir = video_dir / "pitcher_calculations" / f"{frame_name}_angle_{start_joint}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Save JSON data
@@ -246,7 +244,7 @@ def calculate_frame_angle(frame_path, video_dir, video_id, ground_truth_data,
         angle_image = draw_angle_on_image(image, pitcher_data, ground_truth_angle, start_joint)
 
         # Save visualization image
-        output_image = output_dir / f"{frame_name}_angle.jpg"
+        output_image = output_dir / f"{frame_name}_angle_{start_joint}.jpg"
         cv2.imwrite(str(output_image), angle_image)
 
     except Exception as e:
@@ -262,7 +260,7 @@ def process_all_videos(baseball_vids_dir, ground_truth_data, start_joint='should
     Args:
         baseball_vids_dir: Path to baseball_vids directory
         ground_truth_data: Dictionary with ground truth angles from CSV
-        start_joint: 'shoulder' or 'elbow'
+        start_joint: 'shoulder', 'elbow', or 'both'
         force: If True, reprocess all frames
     """
     # Get all video directories
@@ -277,6 +275,12 @@ def process_all_videos(baseball_vids_dir, ground_truth_data, start_joint='should
     print(f"CALCULATING PITCHER ANGLES")
     print(f"Start joint: {start_joint}")
     print(f"{'=' * 50}\n")
+
+    # Determine which joints to process
+    if start_joint == 'both':
+        joints_to_process = ['shoulder', 'elbow']
+    else:
+        joints_to_process = [start_joint]
 
     # Statistics
     total_frames = 0
@@ -332,29 +336,36 @@ def process_all_videos(baseball_vids_dir, ground_truth_data, start_joint='should
 
             print(f"  [{frame_path.name}] ", end='', flush=True)
 
-            try:
-                success, message = calculate_frame_angle(
-                    frame_path, video_dir, video_id, ground_truth_data,
-                    start_joint=start_joint, force=force
-                )
+            for joint in joints_to_process:
+                try:
+                    success, message = calculate_frame_angle(
+                        frame_path, video_dir, video_id, ground_truth_data,
+                        start_joint=joint, force=force
+                    )
 
-                if success:
-                    if message == "Already calculated":
+                    if success == "skip":
+                        # Only count skip once per frame, not per joint
+                        if joint == joints_to_process[0]:
+                            video_skipped += 1
+                            total_skipped += 1
+                        print(f"⊘ {message}" if len(joints_to_process) == 1 else f"⊘ {message} ({joint})")
+                        break  # If no pitcher, skip remaining joints for this frame
+                    elif success and "Already calculated" in message:
                         video_skipped += 1
                         total_skipped += 1
-                        print("SKIPPED")
-                    else:
+                        print(f"SKIP: {message}")
+                    elif success:
                         video_processed += 1
                         total_processed += 1
-                        print(f"✓ {message}")
-                else:
+                        print(f"✓ {message}" if len(joints_to_process) == 1 else f"✓ {message} ({joint})")
+                    else:
+                        video_failed += 1
+                        total_failed += 1
+                        print(f"✗ {message}" if len(joints_to_process) == 1 else f"✗ {message} ({joint})")
+                except Exception as e:
                     video_failed += 1
                     total_failed += 1
-                    print(f"✗ {message}")
-            except Exception as e:
-                video_failed += 1
-                total_failed += 1
-                print(f"✗ Error: {str(e)}")
+                    print(f"✗ Error: {str(e)}" if len(joints_to_process) == 1 else f"✗ Error ({joint}): {str(e)}")
 
         print(f"  Video summary: {video_processed} processed, {video_skipped} skipped, {video_failed} failed")
         print()
@@ -422,8 +433,8 @@ def main():
         "--start-joint",
         type=str,
         default="shoulder",
-        choices=["shoulder", "elbow"],
-        help="Joint to start angle measurement from (default: shoulder)"
+        choices=["shoulder", "elbow", "both"],
+        help="Joint to start angle measurement from (default: shoulder). Use 'both' to calculate both joints."
     )
     parser.add_argument(
         "--force",
